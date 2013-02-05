@@ -202,7 +202,7 @@ function re_hash( &$hash, &$password )
   /* SHA256 */
   if( $check_hash[1] == '5' ) //sha256
   {
-	$length = $this->get_hash_length('sha256');
+	$length = $this->get_hash_length('sha256', substr($check_hash[2], 7));
 	if( CRYPT_SHA256 === 1 && strlen($hash) === $length && function_exists('crypt') === true )
 	{
 	  //example hash: $5$5000$4AiQrGXEUiRbhYJDsx4LmvU4Jpf9s5tkiPct2zQfi94
@@ -221,7 +221,7 @@ function re_hash( &$hash, &$password )
   /* SHA512 */
   if( $check_hash[1] == '6' )
   {
-	$length = $this->get_hash_length('sha512');
+	$length = $this->get_hash_length('sha512', substr($check_hash[2], 7));
 	if( CRYPT_SHA512 === 1 && strlen($hash) === $length && function_exists('crypt') === true )
 	{
 	  //example hash: $6$5000$nYt6jEzMC44skkjon6BEyZQOa3dcYa/pqgyHRtEd3BVkJRlaXJwtqRCsLiWdZ3OT1Xo54r2EXDuv5yxfOQPKo0
@@ -237,7 +237,7 @@ function re_hash( &$hash, &$password )
     }
   }
 
-  $length = $this->get_hash_length('md5');
+  $length = $this->get_hash_length('md5', substr($check_hash[2], 7));
   if( $check_hash[1] == 'CL' && strlen($hash) === $length )
   {
 	//md5 fallback
@@ -254,14 +254,20 @@ function re_hash( &$hash, &$password )
  * function determins the expected hash length. Only affects 2ha256/512 but I handle all
  * lengths here to have a consistent place to handle them
  * @param string $type supported hash type
+ * @param int $rounds=null may be used to override the hash length setting of this class.used by re_hash() to validate passwords with a different rounds setting then what is currently used.
  * @return bool/int integer length value on success or boolean false on error
  */
-private function get_hash_length( $type )
+private function get_hash_length( $type, $rounds=null )
 {
   $doloop = false; //only run loop for sha256/512
   
   //make sure the hash type is valid
   if( $this->is_name_valid($type) !== true ) return false;
+  
+  //apply a custom hash_rounds setting
+  if( $rounds !== null ){
+	$this->set_hash_rounds( $type, $rounds);
+  }
   
   if( $type === 'sha512' || $type === 'sha256' )
   {
