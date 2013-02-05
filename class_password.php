@@ -156,7 +156,7 @@ function hash( &$string, $pass_the_salt=null, $use_crypt=true)
   //get expected hash length
   $length = $this->get_hash_length('md5');
   $hash = $string;
-  if( $length === false ) break; //invalid length
+  if( $length === false ) return false; //invalid length
 
   for( $x=0 ; $x < $this->hash_rounds['md5'] ; ++$x)
   {
