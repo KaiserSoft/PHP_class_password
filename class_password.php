@@ -61,16 +61,42 @@ class password{
   private $hash_rounds;
   private $hash_type;
   private $hash_supported;
+  private $config;
 
 
 function __construct(){
   /* hashing stuff */
   $this->hash_type = 'sha512'; // "sha256", "sha512" or "md5" class_default: sha512
   $this->hash_supported = 'sha256|sha512|md5'; //hashed supported DO NOT CHANGE
-  $this->hash_rounds['sha256'] = (int)'10000'; // min:1000 max:999999999  class_default: 10000 was 5000 before release
-  $this->hash_rounds['sha512'] = (int)'10000'; // min:1000 max:999999999  class_default: 10000 was 5000 before release
-  $this->hash_rounds['md5'] = (int)'6000'; //min:1000  max:999999999 class_default: 6000 was 3000 before release
+  $this->hash_rounds['sha256'] = (int)10000; // min:1000 max:999999999  class_default: 10000 was 5000 before release
+  $this->hash_rounds['sha512'] = (int)10000; // min:1000 max:999999999  class_default: 10000 was 5000 before release
+  $this->hash_rounds['md5'] = (int)6000; //min:1000  max:999999999 class_default: 6000 was 3000 before release
+  $this->config['min_strlen'] = (int)4; //sets the minimum strlen this class will process
 }
+
+  /**
+   * function to set a config value
+   * @param string $name name of config setting
+   * @param mixed $value value of setting
+   * @return boolean true when the setting exists, false if not
+   */
+  function set_config( $name, $value ){
+    if( isset($this->config[$name]) ){
+      $this->config[$name] = $value;
+      return true;
+    }else
+      return false;
+  }
+
+   /**
+   * method to retrieve a config value from the config array
+   * @param string $config_name name of config value
+   * @return string/int the config setting
+   */
+  function get_config( $name ){
+    return @$this->config[$name];
+  }
+
 
 /**
  * function to change the hash type
@@ -108,6 +134,9 @@ function set_hash_rounds( $type, $rounds ){
  */
 function hash( &$string, $pass_the_salt=null, $use_crypt=true)
 {
+  //refuse to hash very short strings
+  if( strlen($string) < $this->config['min_strlen'] ) return false;
+
   $hash = null;
   if( function_exists('crypt') === true && ( CRYPT_SHA512 === 1 || CRYPT_SHA256 == 1)  && $use_crypt === true )
   {
@@ -191,14 +220,23 @@ function validate( &$hash, &$password )
  * @return string/bool hashed password or bool false on failure
  */
 function re_hash( &$hash, &$password )
-{    
-  $check_hash = explode('$', $hash);
-  if( isset($check_hash[1]) !== true ) return false; //invalid hash passed
-  if( isset($check_hash[2]) !== true ) return false; //invalid hash passed
-  if( isset($check_hash[3]) !== true ) return false; //invalid hash passed
-  //
-  //determine the type of hash and prepare the hash
-    
+{
+  //refuse to validate very short passwords
+  if( strlen($password) < $this->config['min_strlen'] ) return false;
+
+  if( strstr( $hash, '$') ){
+	$check_hash = explode('$', $hash);
+	if( isset($check_hash[1]) !== true ) return false; //invalid hash passed
+	if( isset($check_hash[2]) !== true ) return false; //invalid hash passed
+	if( isset($check_hash[3]) !== true ) return false; //invalid hash passed
+  }elseif( strlen($hash) === 32 ){
+	//could be a md5 hash, handle this here
+	return md5($password);
+  }else{
+	return false;
+  }
+
+  //determine the type of hash then hash the password and return the result for comparsion
   /* SHA256 */
   if( $check_hash[1] == '5' ) //sha256
   {
@@ -224,7 +262,7 @@ function re_hash( &$hash, &$password )
 	$length = $this->get_hash_length('sha512', substr($check_hash[2], 7));
 	if( CRYPT_SHA512 === 1 && strlen($hash) === $length && function_exists('crypt') === true )
 	{
-	  //example hash: $6$5000$nYt6jEzMC44skkjon6BEyZQOa3dcYa/pqgyHRtEd3BVkJRlaXJwtqRCsLiWdZ3OT1Xo54r2EXDuv5yxfOQPKo0
+	  //example hash: $6$rounds=5000$nYt6jEzMC44skkjon6BEyZQOa3dcYa/pqgyHRtEd3BVkJRlaXJwtqRCsLiWdZ3OT1Xo54r2EXDuv5yxfOQPKo0
 	  //[0] = '', [1] = 5, [2] = rounds, [3] = salt/hash
 	  $salt = substr($check_hash[3], 0, 16); //get only the salt part
 	  $ret = crypt($password, '$6$'.$check_hash[2].'$'.$salt); //and try to recreate the password
@@ -237,7 +275,7 @@ function re_hash( &$hash, &$password )
     }
   }
 
-  $length = $this->get_hash_length('md5', substr($check_hash[2], 7));
+  $length = $this->get_hash_length('md5', $check_hash[2]);
   if( $check_hash[1] == 'CL' && strlen($hash) === $length )
   {
 	//md5 fallback
@@ -251,7 +289,7 @@ function re_hash( &$hash, &$password )
 }
 
 /**
- * function determins the expected hash length. Only affects 2ha256/512 but I handle all
+ * function determins the expected hash length. Only affects sha256/512 but I handle all
  * lengths here to have a consistent place to handle them
  * @param string $type supported hash type
  * @param int $rounds=null may be used to override the hash length setting of this class.used by re_hash() to validate passwords with a different rounds setting then what is currently used.
